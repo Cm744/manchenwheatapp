@@ -1,0 +1,104 @@
+###Weibull
+##percentile estimators£º
+ff=function(beta,x){
+  n=length(x)
+y<-rep(0,n)
+  for(i in 1:n){
+  y[i]=(x[i]-beta[2]*(-log(1-i/(n+1)))^(1/beta[1]))^2
+ }
+ return(sum(y))
+ }
+##least square estimators£º
+gg=function(alpha,x){
+  n=length(x)
+y<-rep(0,n)
+  for(i in 1:n){
+  y[i]=(1-exp(-(x[i]/alpha[2])^alpha[1])-i/(n+1))^2
+}
+ return(sum(y))
+ }
+##maximum likelihood estimators£º
+mle=function(theta,x){
+sum(-dweibull(x,shape=theta[1],scale=theta[2],log=TRUE))
+}
+
+ nsim=1000
+ls.k=double(1000)
+ls.lambda=double(1000)
+ MLE.lambda=double(1000)
+ MLE.k=double(1000)
+ per.lambda=double(1000)
+ per.k=double(1000)
+ for(i in 1:1000){
+ a=rweibull(200,3,5)
+ xsim=sort(a)
+ theta.start=c(median(a),IQR(a)/2)
+ res=nlm(mle,theta.start,x=a)
+ MLE.k[i]=res$estimate[1]
+ MLE.lambda[i]=res$estimate[2]
+ beta.start=c(median(xsim),mean(xsim))
+ per=nlm(ff,beta.start,x=xsim)
+ per.k[i]=per$estimate[1]
+ per.lambda[i]=per$estimate[2]
+ alpha.start=c(median(xsim),mean(xsim))
+ ls=nlm(gg,alpha.start,x=xsim)
+ ls.k[i]=ls$estimate[1]
+ ls.lambda[i]=ls$estimate[2]
+ }
+
+
+## Cox-snell correction for MLE£º
+  bbb=function(gamma,lammada,k,n){
+  y1=n*(k^2)/((lammada)^2)
+  y2=-n*(1-gamma)/lammada
+  y3=-n*(1-gamma)/lammada
+  y4=(6*gamma^2-12*gamma+pi^2+6)*n/(6*k^2)
+  out=list(y1,y2,y3,y4)
+  return(out)
+  }
+  
+  aaaa=function(gamma,lammada,k,n){
+  y1=-n*(k-1)*k^2/(2*(lammada^3))
+  y2=n*(-1+gamma+3*k-gamma*k)/(2*(lammada^2))
+  y3=n*(-1+gamma+3*k-gamma*k)/(2*(lammada^2))
+  y4=-n*(6*gamma^2-24*gamma+pi^2+12)/(12*k*lammada)
+  y5=-n*(-1+gamma+k+gamma*k)/(2*(lammada^2))
+  y6=-n*(6*gamma^2-24*gamma+pi^2+12)/(12*k*lammada)
+  y7=-n*(6*gamma^2-24*gamma+pi^2+12)/(12*k*lammada)
+  y8=-n*(-30*gamma^2+6*gamma^3-5*pi^2+3*gamma*(8+pi^2)+12*1.20206)/(6*k^3)
+  out=list(y1,y2,y3,y4,y5,y6,y7,y8)
+  return(out)
+  }
+nsim=1000
+bias.corrected.lambda=double(nsim)
+bias.corrected.k=double(nsim)
+for(i in 1:nsim){
+K=matrix(as.numeric(bbb(0.5772156,MLE.lambda[i],MLE.k[i],200)),ncol=2)
+A=matrix(as.numeric(aaaa(0.5772156,MLE.lambda[i],MLE.k[i],200)),ncol=4)
+V=solve(K)
+W=as.vector(V)
+U=matrix(W,ncol=1)
+T=V%*%A%*%U
+bias.corrected.lambda[i]=T[1,1]
+bias.corrected.k[i]=T[2,1]
+}
+
+
+
+##Bootstrap correction for MLE
+nsim=1000
+bootstrap.k=double(nsim)
+bootstrap.lambda=double(nsim)
+k.boot=double(100)
+lambda.boot=double(100)
+for(j in 1:nsim){
+for(i in 1:50){
+xsim=rweibull(200,MLE.k[j],MLE.lambda[j])                                                             
+theta.start=c(median(xsim),IQR(xsim)/2)
+res=nlm(mle,theta.start,x=xsim)
+k.boot[i]=res$estimate[1]
+lambda.boot[i]=res$estimate[2]
+}
+bootstrap.k[j]=2*MLE.k[j]-sum(k.boot)/50
+bootstrap.lambda[j]=2*MLE.lambda[j]-sum(lambda.boot)/50
+}
